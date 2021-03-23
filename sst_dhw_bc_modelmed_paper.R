@@ -108,12 +108,12 @@ cl <- makeCluster(cores, output="")
 registerDoParallel(cl)
 for(i in 1:length(models)){
   #get all 12 bias rasters for each month
-  for(j in 1:length(biasfiles)){
+  for(j in 1:12){
     a <- paste("bias.", j, sep = "")
     r <- raster(paste0(bias.folder,modelnames[i],"_bias",j,".tif",sep=""))
     assign(a,r)
   }
-  biasmonths <- lapply(paste0('bias.',1:length(biasfiles)),get)
+  biasmonths <- lapply(paste0('bias.',1:12),get)
   #get model into comparable raster format
   i_brickC <- calc(models[[i]], fun=function(x){x - 273.15}) #change from K to C
   i_brickCd <- disaggregate(i_brickC,fact=2)
@@ -249,12 +249,12 @@ cl <- makeCluster(cores, output="")
 registerDoParallel(cl)
 for(i in 1:length(models)){
   #get all 12 bias rasters for each month
-  for(j in 1:length(biasfiles)){
+  for(j in 1:12){
     a <- paste("bias.", j, sep = "")
     r <- raster(paste0(bias.folder,modelnames[i],"_bias",j,".tif",sep=""))
     assign(a,r)
   }
-  biasmonths <- lapply(paste0('bias.',1:length(biasfiles)),get)
+  biasmonths <- lapply(paste0('bias.',1:12),get)
   #get model into comparable raster format
   i_brickC <- calc(models[[i]], fun=function(x){x - 273.15}) #change from K to C
   i_brickCd <- disaggregate(i_brickC,fact=2)
@@ -353,7 +353,7 @@ setwd("F:/sst/rcp45")
 
 parent.folder <- "D:/SST/CMIP5/RCP45/grid"
 m <- list.files(parent.folder, pattern=".nc",full.names=T)
-n <- m[-c(1,2,6:12,21:23)]
+n <- m[-c(1,2,6:12,21:23,26)]
 for(i in 1:length(n)){
   a <- paste("m45.", i, sep = "")
   r <- brick(n[i])
@@ -385,12 +385,12 @@ cl <- makeCluster(cores, output="")
 registerDoParallel(cl)
 for(i in 1:length(models)){
   #get all 12 bias rasters for each month
-  for(j in 1:length(biasfiles)){
+  for(j in 1:12){
     a <- paste("bias.", j, sep = "")
     r <- raster(paste0(bias.folder,modelnames[i],"_bias",j,".tif",sep=""))
     assign(a,r)
   }
-  biasmonths <- lapply(paste0('bias.',1:length(biasfiles)),get)
+  biasmonths <- lapply(paste0('bias.',1:12),get)
   #get model into comparable raster format
   i_brickC <- calc(models[[i]], fun=function(x){x - 273.15}) #change from K to C
   i_brickCd <- disaggregate(i_brickC,fact=2)
@@ -522,12 +522,12 @@ cl <- makeCluster(cores, output="")
 registerDoParallel(cl)
 for(i in 1:length(models)){
   #get all 12 bias rasters for each month
-  for(j in 1:length(biasfiles)){
+  for(j in 1:12){
     a <- paste("bias.", j, sep = "")
     r <- raster(paste0(bias.folder,modelnames[i],"_bias",j,".tif",sep=""))
     assign(a,r)
   }
-  biasmonths <- lapply(paste0('bias.',1:length(biasfiles)),get)
+  biasmonths <- lapply(paste0('bias.',1:12),get)
   #get model into comparable raster format
   i_brickC <- calc(models[[i]], fun=function(x){x - 273.15}) #change from K to C
   i_brickCd <- disaggregate(i_brickC,fact=2)
