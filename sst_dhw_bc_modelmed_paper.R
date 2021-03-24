@@ -176,7 +176,7 @@ startTime <- startTimer()
 # system.time "seems" like a simpler way to track method performance
 # following #3 from this link: https://www.alexejgossmann.com/benchmarking_r/
 # Keeping startTimer/stopTimer since they set up cluster, cores, and what not
-system.time(processModels(models, dhwPath="F:/dhw/hist/", sstPath="F:/sst/hist/", max=156, year=1849))
+system.time(processModels(models, biasPath=bias.folder, dhwPath="F:/dhw/hist/", sstPath="F:/sst/hist/", max=156, year=1849))
 stopTimer(startTime)
 #30 min per model
 #total time = 6.78 hours
@@ -268,7 +268,7 @@ monthlabel <- c(rep(1:12,95))
 memory.limit(size=50000000) #memory free = 113524476
 
 startTime <- startTimer()
-system.time(processModels(models, dhwPath="F:/dhw/rcp85/", sstPath="F:/sst/rcp85/"))
+system.time(processModels(models, biasPath=bias.folder, dhwPath="F:/dhw/rcp85/", sstPath="F:/sst/rcp85/"))
 stopTimer(startTime)
 #total time = 3.7 hr
 
@@ -355,7 +355,7 @@ monthlabel <- c(rep(1:12,95))
 memory.limit(size=50000000) #memory free = 113524476
 
 startTime <- startTimer()
-system.time(processModels(models, dhwPath="F:/dhw/rcp45/", sstPath="F:/sst/rcp45/"))
+system.time(processModels(models, biasPath=bias.folder, dhwPath="F:/dhw/rcp45/", sstPath="F:/sst/rcp45/"))
 stopTimer(startTime)
 #total time = 2.98 hr
 
@@ -443,7 +443,7 @@ monthlabel <- c(rep(1:12,95))
 memory.limit(size=50000000) #memory free = 113524476
 
 startTime <- startTimer()
-system.time(processModels(models, dhwPath="F:/dhw/rcp26/", sstPath="F:/sst/rcp26/"))
+system.time(processModels(models, biasPath=bias.folder, dhwPath="F:/dhw/rcp26/", sstPath="F:/sst/rcp26/"))
 stopTimer(startTime)
 #46 min per model
 #total time =
