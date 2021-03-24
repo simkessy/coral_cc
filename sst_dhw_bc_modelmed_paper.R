@@ -110,9 +110,9 @@ m <- list.files(parent.folder, pattern=".nc",full.names=T)
 # Remove files from given indices
 n <- m[-c(1,6,7,12,19,20,21,23,24)]
 # Create mh.[N] objects assigned to corresponding raster
-for(i in 1:length(m)){
+for(i in 1:length(n)){
   object <- paste("mh.", i, sep = "")
-  r <- brick(m[i])
+  r <- brick(n[i])
   assign(object,r)
 }
 
@@ -132,7 +132,7 @@ mh.10<-stack(e120,mh.10)
 e119<-stack(replicate(119,e))
 mh.11<-stack(e119,mh.11)
 mh.15[mh.15<270] <- NA
-mh.5[mh.5<270] <- NA  fdgdf
+mh.5[mh.5<270] <- NA
 
 # Get the mh.1 to mh:N models
 models <- lapply(paste0('mh.',1:length(m)),get)
@@ -173,7 +173,7 @@ monthlabel <- c(rep(1:12,156))
 memory.limit(size=50000000) #memory free = 113524476
 
 startTime <- startTimer()
-# system.time "seems" like a simpler way to track method performance
+# system.time seems like a simpler way to track method performance
 # following #3 from this link: https://www.alexejgossmann.com/benchmarking_r/
 # Keeping startTimer/stopTimer since they set up cluster, cores, and what not
 system.time(processModels(models, biasPath=bias.folder, dhwPath="F:/dhw/hist/", sstPath="F:/sst/hist/", max=156, year=1849))
