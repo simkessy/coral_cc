@@ -102,18 +102,18 @@ registerDoParallel(cl)
 
 reefext <- rgis::fast_extract(sf=reefs,ras=dhw,funct=function(x){max(x,na.rm=T)},parallel=T)
 dfext <- as.data.frame(reefext)
-foreach::foreach(i=c(1,5:8,11,19,20), .packages=c("raster","plyr")) %dopar% {
-  #for (i in 1:20){
+foreach::foreach(i=1:20, .packages=c("raster","plyr","tibble")) %dopar% {
   x <- paste0("dhw_modelmedian_bc_5y",2000+i*5)
   dfi <- subset(dfext,select=c("pointid","grid_code", "iscoral","ID",x))
   names(dfi) <- c("pointid","grid_code", "iscoral","ID","dhw")
-  dfi$suit <- with(dfi, ifelse(dhw <= 8,1, 0)) #suitable number of dhw is <8
+  dfi$suit05[dfi$dhw <=8] <- 1
+  dfi$suit05[dfi$dhw > 8] <- 0 #suitable number of dhw is <8
   write.csv(dfi,rcp45suitcsvout[i], row.names=FALSE)
   
-  #dfi$dhw_coral <- dfi$suit * dfi$iscoral
-  #c <- count(dfi, vars="dhw_coral")
-  #y <- add_column(c,year=paste0(i*5+2000),.before=T)
-  #count <- rbind(y,count)
+  dfi$dhw_coral <- dfi$suit * dfi$iscoral
+  c <- count(dfi, vars="dhw_coral")
+  y <- add_column(c,year=paste0(i*5+2000),.before=T)
+  count <- rbind(y,count)
 }
 
 stopCluster(cl)

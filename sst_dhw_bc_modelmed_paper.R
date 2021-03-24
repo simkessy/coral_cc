@@ -6,6 +6,24 @@ library(sf)
 library(foreach)
 
 
+# Utility functions to track how long functions are taking
+# Additionally sets process cores and enables parallelism
+startTimer = function() {
+  start = Sys.time()
+  cores = detectCores()-1
+  cl = makeCluster(cores, output="")
+  registerDoParallel(cl)
+  return(start)
+}
+
+# Utility function which takes a startTime and returns function duration
+stopTimer = function(start) {
+  stopCluster(cl)
+  finish = Sys.time()
+  return(finish - start)
+}
+
+
 #### SST BIAS CALCULATION
 
 
@@ -67,10 +85,7 @@ modelnames <- c("CanESM2","CMCC-CESM","CMCC-CM","CMCC-CMS","GISS-E2-H-CC","GISS-
 #calculate mean monthly val for 1982-2005
 #calculate bias (difference between monthly val and OISST)
 
-start <- Sys.time()
-cores<- detectCores()-1
-cl <- makeCluster(cores, output="") 
-registerDoParallel(cl)
+startTime <- startTimer()
 for(i in 1:length(models)){
   mod <- models[[i]]
   for(j in 0:11){
@@ -90,9 +105,7 @@ for(i in 1:length(models)){
     bias <- raster::overlay(oisstd,i_brickf,fun=function(x,y,na.rm=T){return((x-y))},filename=paste0("F:/sst/bias/",modelnames[i],"_bias",j+1,".tif",sep=""))
   }
 }
-stopCluster(cl)
-finish <- Sys.time()
-finish-start
+stopTimer(startTime)
 
 
 #adjust bias to models. 
@@ -102,10 +115,7 @@ bias.folder <- "F:/sst/bias/"
 monthlabel <- c(rep(1:12,156))
 memory.limit(size=50000000) #memory free = 113524476
 
-start <- Sys.time()
-cores<- detectCores()-1
-cl <- makeCluster(cores, output="") 
-registerDoParallel(cl)
+startTime <- startTimer()
 for(i in 1:length(models)){
   #get all 12 bias rasters for each month
   for(j in 1:12){
@@ -139,20 +149,14 @@ for(i in 1:length(models)){
     gc()
   }
 }
-stopCluster(cl)
-finish <- Sys.time()
-finish-start
+stopTimer(startTime)
 #30 min per model
 #total time = 6.78 hours
 
 
 
 #calculate model mean and model median
-start <- Sys.time()
-cores<- detectCores()-1
-cl <- makeCluster(cores, output="") 
-registerDoParallel(cl)
-
+startTime <- startTimer()
 foreach::foreach(i=1:156, .packages=c("raster")) %dopar% {
   dhwb <- raster()
   sstb <- raster()
@@ -167,17 +171,11 @@ foreach::foreach(i=1:156, .packages=c("raster")) %dopar% {
   calc(sstb,fun=mean,na.rm=T,filename=paste0("F:/sst/hist/modelmean/modelmean_bc_",1849+i,".tif",sep=""),overwrite=T)
   calc(sstb,fun=median,na.rm=T,filename=paste0("F:/sst/hist/modelmedian/modelmedian_bc_",1849+i,".tif",sep=""),overwrite=T)
 }
-stopCluster(cl)
-finish <- Sys.time()
-finish-start
+stopTimer(startTime)
 #total time = 1.79 hrs
 
 #calculate 10 year mean
-start <- Sys.time()
-cores<- detectCores()-1
-cl <- makeCluster(cores, output="") 
-registerDoParallel(cl)
-
+startTime <- startTimer()
 foreach::foreach(i=1:16, .packages=c("raster")) %dopar% {
   one = i*10-5
   ten = i*10+5
@@ -200,9 +198,8 @@ foreach::foreach(i=1:16, .packages=c("raster")) %dopar% {
   calc(sstmb,fun=mean,filename=paste0("F:/sst/hist/modelmean_bc_10y",1845+i*10,".tif",sep=""))
   calc(sstdb,fun=mean,filename=paste0("F:/sst/hist/modelmedian_bc_10y",1845+i*10,".tif",sep=""))
 }
-stopCluster(cl)
-finish <- Sys.time()
-finish-start
+stopTimer(startTime)
+
 #total time = 3 min
 
 
@@ -243,10 +240,7 @@ bias.folder <- "F:/sst/bias/"
 monthlabel <- c(rep(1:12,95))
 memory.limit(size=50000000) #memory free = 113524476
 
-start <- Sys.time()
-cores<- detectCores()-1
-cl <- makeCluster(cores, output="") 
-registerDoParallel(cl)
+startTime <- startTimer()
 for(i in 1:length(models)){
   #get all 12 bias rasters for each month
   for(j in 1:12){
@@ -279,19 +273,12 @@ for(i in 1:length(models)){
     gc()
   }
 }
-stopCluster(cl)
-finish <- Sys.time()
-finish-start
-#46 min per model
+stopTimer(startTime)
 #total time = 3.7 hr
 
 
 #calculate model mean and model median
-start <- Sys.time()
-cores<- detectCores()-1
-cl <- makeCluster(cores, output="") 
-registerDoParallel(cl)
-
+startTime <- startTimer()
 foreach::foreach(i=1:95, .packages=c("raster")) %dopar% {
   dhwb <- raster()
   sstb <- raster()
@@ -306,17 +293,11 @@ foreach::foreach(i=1:95, .packages=c("raster")) %dopar% {
   calc(sstb,fun=mean,na.rm=T,filename=paste0("F:/sst/rcp85/modelmean/modelmean_bc_",2005+i,".tif",sep=""),overwrite=T)
   calc(sstb,fun=median,na.rm=T,filename=paste0("F:/sst/rcp85/modelmedian/modelmedian_bc_",2005+i,".tif",sep=""),overwrite=T)
 }
-stopCluster(cl)
-finish <- Sys.time()
-finish-start
+stopTimer(startTime)
 #total time = 1.9 hr
 
 #calculate 10 year mean
-start <- Sys.time()
-cores<- detectCores()-1
-cl <- makeCluster(cores, output="") 
-registerDoParallel(cl)
-
+startTime <- startTimer()
 foreach::foreach(i=1:20, .packages=c("raster")) %dopar% {
   one = i*5-2
   five = i*5+2
@@ -339,9 +320,7 @@ foreach::foreach(i=1:20, .packages=c("raster")) %dopar% {
   calc(sstmb,fun=mean,filename=paste0("F:/sst/rcp85/modelmean_bc_5y",2000+i*5,".tif",sep=""))
   calc(sstdb,fun=mean,filename=paste0("F:/sst/rcp85/modelmedian_bc_5y",2000+i*5,".tif",sep=""))
 }
-stopCluster(cl)
-finish <- Sys.time()
-finish-start
+stopTimer(startTime)
 #total time = 1.98 min
 
 
@@ -379,10 +358,7 @@ bias.folder <- "F:/sst/bias/"
 monthlabel <- c(rep(1:12,95))
 memory.limit(size=50000000) #memory free = 113524476
 
-start <- Sys.time()
-cores<- detectCores()-1
-cl <- makeCluster(cores, output="") 
-registerDoParallel(cl)
+startTime <- startTimer()
 for(i in 1:length(models)){
   #get all 12 bias rasters for each month
   for(j in 1:12){
@@ -415,20 +391,13 @@ for(i in 1:length(models)){
     gc()
   }
 }
-stopCluster(cl)
-finish <- Sys.time()
-finish-start
-#46 min per model
-#total time = 
+stopTimer(startTime)
+#total time = 2.98 hr
 
 
 #calculate model mean and model median
-start <- Sys.time()
-cores<- detectCores()-1
-cl <- makeCluster(cores, output="") 
-registerDoParallel(cl)
-
-foreach::foreach(i=1:20, .packages=c("raster")) %dopar% {
+startTime <- startTimer()
+foreach::foreach(i=1:95, .packages=c("raster")) %dopar% {
   dhwb <- raster()
   sstb <- raster()
   for(j in 1:length(modelnames)){
@@ -442,17 +411,11 @@ foreach::foreach(i=1:20, .packages=c("raster")) %dopar% {
   calc(sstb,fun=mean,na.rm=T,filename=paste0("F:/sst/rcp45/modelmean/modelmean_bc_",2005+i,".tif",sep=""),overwrite=T)
   calc(sstb,fun=median,na.rm=T,filename=paste0("F:/sst/rcp45/modelmedian/modelmedian_bc_",2005+i,".tif",sep=""),overwrite=T)
 }
-stopCluster(cl)
-finish <- Sys.time()
-finish-start
+stopTimer(startTime)
 #total time = 1.895363 hours
 
 #calculate 5 year mean
-start <- Sys.time()
-cores<- detectCores()-1
-cl <- makeCluster(cores, output="") 
-registerDoParallel(cl)
-
+startTime <- startTimer()
 foreach::foreach(i=1:20, .packages=c("raster")) %dopar% {
   one <- i*5-2
   five <- i*5+2
@@ -475,9 +438,7 @@ foreach::foreach(i=1:20, .packages=c("raster")) %dopar% {
   calc(sstmb,fun=mean,filename=paste0("F:/sst/rcp45/modelmean_bc_5y",2000+i*5,".tif",sep=""))
   calc(sstdb,fun=mean,filename=paste0("F:/sst/rcp45/modelmedian_bc_5y",2000+i*5,".tif",sep=""))
 }
-stopCluster(cl)
-finish <- Sys.time()
-finish-start
+stopTimer(startTime)
 #total time = 2 min
 
 
@@ -491,7 +452,7 @@ setwd("F:/sst/rcp26")
 
 parent.folder <- "D:/SST/CMIP5/RCP26/grid"
 m <- list.files(parent.folder, pattern=".nc",full.names=T)
-n <- m[-c(2:6,10,11,12)]
+n <- m[-c(2:6,10,11,12,15)]
 for(i in 1:length(n)){
   a <- paste("m26.", i, sep = "")
   r <- brick(n[i])
@@ -516,10 +477,7 @@ bias.folder <- "F:/sst/bias/"
 monthlabel <- c(rep(1:12,95))
 memory.limit(size=50000000) #memory free = 113524476
 
-start <- Sys.time()
-cores<- detectCores()-1
-cl <- makeCluster(cores, output="") 
-registerDoParallel(cl)
+startTime <- startTimer()
 for(i in 1:length(models)){
   #get all 12 bias rasters for each month
   for(j in 1:12){
@@ -552,19 +510,13 @@ for(i in 1:length(models)){
     gc()
   }
 }
-stopCluster(cl)
-finish <- Sys.time()
-finish-start
+stopTimer(startTime)
 #46 min per model
 #total time = 
 
 
 #calculate model mean and model median
-start <- Sys.time()
-cores<- detectCores()-1
-cl <- makeCluster(cores, output="") 
-registerDoParallel(cl)
-
+startTime <- startTimer()
 foreach::foreach(i=1:95, .packages=c("raster")) %dopar% {
   dhwb <- raster()
   sstb <- raster()
@@ -579,9 +531,7 @@ foreach::foreach(i=1:95, .packages=c("raster")) %dopar% {
   calc(sstb,fun=mean,na.rm=T,filename=paste0("F:/sst/rcp26/modelmean/modelmean_bc_",2005+i,".tif",sep=""),overwrite=T)
   calc(sstb,fun=median,na.rm=T,filename=paste0("F:/sst/rcp26/modelmedian/modelmedian_bc_",2005+i,".tif",sep=""),overwrite=T)
 }
-stopCluster(cl)
-finish <- Sys.time()
-finish-start
+stopTimer(startTime)
 #total time = 2 hr
 
 #calculate 5 year mean
