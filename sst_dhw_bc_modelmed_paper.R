@@ -27,13 +27,13 @@ stopTimer = function(start) {
 # Note: Don't love the arg `max` here, not sure what to call it
 # Note2: I think these are years, but I've been wrong before
 # Use whatever arguement names make sense
-processModels = function(models, dhwPath, sstPath, max=95, year=2005) {
+processModels = function(models, biasPath, dhwPath, sstPath, max=95, year=2005) {
   for(i in 1:length(models)) {
 
     # Get all 12 bias rasters for each month
     for(j in 1:12){
-      a <- paste("bias.", j, sep = "")
-      r <- raster(paste0(bias.folder,modelnames[i],"_bias",j,".tif",sep=""))
+      object <- paste("bias.", j, sep = "")
+      raster <- raster(paste0(biasPath, modelnames[i], "_bias", j, ".tif", sep=""))
       assign(a,r)
     }
 
@@ -106,14 +106,14 @@ setwd("F:/sst/hist")
 
 parent.folder <- "D:/SST/CMIP5/historical"
 # Get list of file names matching the .nc pattern
-historical_files <- list.files(parent.folder, pattern=".nc",full.names=T)
+m <- list.files(parent.folder, pattern=".nc",full.names=T)
 # Remove files from given indices
-historical_files <- historical_files[-c(1,6,7,12,19,20,21,23,24)]
+n <- m[-c(1,6,7,12,19,20,21,23,24)]
 # Create mh.[N] objects assigned to corresponding raster
-for(i in 1:length(historical_files)){
+for(i in 1:length(m)){
   object <- paste("mh.", i, sep = "")
-  raster <- brick(historical_files[i])
-  assign(object,raster)
+  r <- brick(m[i])
+  assign(object,r)
 }
 
 # adjust rasters so have same temporal range
@@ -135,7 +135,7 @@ mh.15[mh.15<270] <- NA
 mh.5[mh.5<270] <- NA  fdgdf
 
 # Get the mh.1 to mh:N models
-models <- lapply(paste0('mh.',1:length(historical_files)),get)
+models <- lapply(paste0('mh.',1:length(m)),get)
 modelnames <- c("CanESM2","CMCC-CESM","CMCC-CM","CMCC-CMS","GISS-E2-H-CC","GISS-E2-H","GISS-E2-R-CC","GISS-E2-R", "HadGEM2-AO","HadGEM2-CC","HadGEM2-ES","inmcm4","MIROC-ESM-CHEM","MIROC-ESM","MRI-CGCM3")
 
 
