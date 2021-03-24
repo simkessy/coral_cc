@@ -23,6 +23,57 @@ stopTimer = function(start) {
   return(finish - start)
 }
 
+# Utility function to process models
+# Note: Don't love the arg `max` here, not sure what to call it
+# Note2: I think these are years, but I've been wrong before
+# Use whatever arguement names make sense
+processModels = function(models, dhwPath, sstPath, max=95, year=2005) {
+  for(i in 1:length(models)) {
+
+    # Get all 12 bias rasters for each month
+    for(j in 1:12){
+      a <- paste("bias.", j, sep = "")
+      r <- raster(paste0(bias.folder,modelnames[i],"_bias",j,".tif",sep=""))
+      assign(a,r)
+    }
+
+    biasmonths <- lapply(paste0('bias.',1:12),get)
+
+    # Get model into comparable raster format
+    i_brickC <- calc(models[[i]], fun=function(x){x - 273.15}) #change from K to C
+    i_brickCd <- disaggregate(i_brickC,fact=2)
+    i_brick1 <- crop(i_brickCd,extent(180,359.5,-90,90))
+    i_brick2 <- crop(i_brickCd,extent(-0.5,180,-90,90))
+    extent(i_brick1) <- c(-180,-0.5,-90,90)
+    i_brickCc <- merge(i_brick1,i_brick2)
+
+    foreach::foreach(l=1:max, .packages=c("raster","foreach")) %dopar% {
+      l1 <- 12*(l-1)+1
+      l2 <- 12*l
+
+      SSTbc <- foreach::foreach(k=l1:l2, .packages=c("raster"), .combine=raster::stack) %dopar% {
+          i_brickf <- focal(i_brickCc[[k]],w=matrix(1,nrow=3,ncol=3),fun=mean,na.rm=T,NAonly=T)
+          raster::overlay(i_brickf,biasmonths[[monthlabel[k]]],fun=function(x,y,na.rm=T){return((x+y))})
+      }
+
+      DHWx <- foreach::foreach(h=1:12, .packages=c("raster"), .combine=raster::stack) %dopar% {
+          d <- disaggregate(SSTbc[[h]],fact=10)
+          DHW <- raster::overlay(d,noaa.mmm,fun=function(x,y,na.rm=T){return((x-y)*4.34)})
+          reclassify(DHW, c(-Inf,0,0))
+      }
+
+      filename.dhw <- paste0(dhwPath, modelnames[i], "/", modelnames[i], "_", year+l, ".tif", sep="")
+      filename.sst <- paste0(sstPath, modelnames[i], "/", modelnames[i], "_bc_", year+l, ".tif", sep="")
+
+      calc(DHWx,fun=sum,filename=filename.dhw)
+      calc(SSTbc,fun=mean,filename=filename.sst)
+
+      # Collect garbage - save the planet
+      gc()
+    }
+  }
+}
+
 
 #### SST BIAS CALCULATION
 
@@ -49,47 +100,53 @@ for(j in 1:12){
 
 
 
-#open historic models. 
+#open historic models.
 
 setwd("F:/sst/hist")
 
 parent.folder <- "D:/SST/CMIP5/historical"
-m <- list.files(parent.folder, pattern=".nc",full.names=T)
-n <- m[-c(1,6,7,12,19,20,21,23,24)]
-for(i in 1:length(n)){
-  a <- paste("mh.", i, sep = "")
-  r <- brick(n[i])
-  assign(a,r)
+# Get list of file names matching the .nc pattern
+historical_files <- list.files(parent.folder, pattern=".nc",full.names=T)
+# Remove files from given indices
+historical_files <- historical_files[-c(1,6,7,12,19,20,21,23,24)]
+# Create mh.[N] objects assigned to corresponding raster
+for(i in 1:length(historical_files)){
+  object <- paste("mh.", i, sep = "")
+  raster <- brick(historical_files[i])
+  assign(object,raster)
 }
 
-#adjust rasters so have same temporal range
-#clean up datasets
+# adjust rasters so have same temporal range
+# clean up datasets
 e <- raster(nrow=180,ncol=360,ext=extent(mh.1),crs=crs(mh.1))
 e[]<-NA
-mh.5<-dropLayer(mh.5,c(1873:1932)) #too many layers. remove the last 60 layers
-mh.7<-dropLayer(mh.7,c(1873:1932)) #too many layers. remove the last 60 layers
+# too many layers. remove the last 60 layers
+mh.5<-dropLayer(mh.5,c(1873:1932))
+# too many layers. remove the last 60 layers
+mh.7<-dropLayer(mh.7,c(1873:1932))
 e120<-stack(replicate(120,e))
-mh.9<-stack(e120,mh.9)#add 120
-mh.10<-stack(e120,mh.10) #add120
+# add 120
+mh.9<-stack(e120,mh.9)
+# add 120
+mh.10<-stack(e120,mh.10)
 e119<-stack(replicate(119,e))
 mh.11<-stack(e119,mh.11)
 mh.15[mh.15<270] <- NA
-mh.5[mh.5<270] <- NA
+mh.5[mh.5<270] <- NA  fdgdf
+
+# Get the mh.1 to mh:N models
+models <- lapply(paste0('mh.',1:length(historical_files)),get)
+modelnames <- c("CanESM2","CMCC-CESM","CMCC-CM","CMCC-CMS","GISS-E2-H-CC","GISS-E2-H","GISS-E2-R-CC","GISS-E2-R", "HadGEM2-AO","HadGEM2-CC","HadGEM2-ES","inmcm4","MIROC-ESM-CHEM","MIROC-ESM","MRI-CGCM3")
 
 
-models <- lapply(paste0('mh.',1:length(n)),get)
-modelnames <- c("CanESM2","CMCC-CESM","CMCC-CM","CMCC-CMS","GISS-E2-H-CC","GISS-E2-H","GISS-E2-R-CC","GISS-E2-R",
-                "HadGEM2-AO","HadGEM2-CC","HadGEM2-ES","inmcm4","MIROC-ESM-CHEM","MIROC-ESM","MRI-CGCM3")
-
-
-#calculate mean monthly val for 1982-2005
-#calculate bias (difference between monthly val and OISST)
+# calculate mean monthly val for 1982-2005
+# calculate bias (difference between monthly val and OISST)
 
 startTime <- startTimer()
 for(i in 1:length(models)){
-  mod <- models[[i]]
+  model <- models[[i]]
   for(j in 0:11){
-    months <- stack(mod[[jans[1:24]+j+1584]])
+    months <- stack(model[[jans[1:24]+j+1584]])
     meanmonth <- calc(months,fun=mean,na.rm=T)
     meanmonth[meanmonth <270] <- NA
     i_brickC <- calc(meanmonth, fun=function(x){x - 273.15}) #change from K to C
@@ -108,7 +165,7 @@ for(i in 1:length(models)){
 stopTimer(startTime)
 
 
-#adjust bias to models. 
+#adjust bias to models.
 #calculate DHW
 #calculate mean year SST. save
 bias.folder <- "F:/sst/bias/"
@@ -116,39 +173,10 @@ monthlabel <- c(rep(1:12,156))
 memory.limit(size=50000000) #memory free = 113524476
 
 startTime <- startTimer()
-for(i in 1:length(models)){
-  #get all 12 bias rasters for each month
-  for(j in 1:12){
-    a <- paste("bias.", j, sep = "")
-    r <- raster(paste0(bias.folder,modelnames[i],"_bias",j,".tif",sep=""))
-    assign(a,r)
-  }
-  biasmonths <- lapply(paste0('bias.',1:12),get)
-  #get model into comparable raster format
-  i_brickC <- calc(models[[i]], fun=function(x){x - 273.15}) #change from K to C
-  i_brickCd <- disaggregate(i_brickC,fact=2)
-  i_brick1 <- crop(i_brickCd,extent(180,359.5,-90,90))
-  i_brick2 <- crop(i_brickCd,extent(-0.5,180,-90,90))
-  extent(i_brick1) <- c(-180,-0.5,-90,90)
-  i_brickCc <- merge(i_brick1,i_brick2)
-  foreach::foreach(l=1:156, .packages=c("raster","foreach")) %dopar% {
-  #for(l in 1:156){
-    l1 <- 12*(l-1)+1
-    l2 <- 12*l
-    SSTbc <- foreach::foreach(k=l1:l2, .packages=c("raster"), .combine=raster::stack) %dopar% {
-      i_brickf <- focal(i_brickCc[[k]],w=matrix(1,nrow=3,ncol=3),fun=mean,na.rm=T,NAonly=T)
-      raster::overlay(i_brickf,biasmonths[[monthlabel[k]]],fun=function(x,y,na.rm=T){return((x+y))})
-    }
-    DHWx <- foreach::foreach(h=1:12, .packages=c("raster"), .combine=raster::stack) %dopar% {
-      d <- disaggregate(SSTbc[[h]],fact=10)
-      DHW <- raster::overlay(d,noaa.mmm,fun=function(x,y,na.rm=T){return((x-y)*4.34)})
-      reclassify(DHW, c(-Inf,0,0))
-    }
-    calc(DHWx,fun=sum,filename=paste0("F:/dhw/hist/",modelnames[i],"/",modelnames[i],"_",1849+l,".tif",sep=""))
-    calc(SSTbc,fun=mean,filename=paste0("F:/sst/hist/",modelnames[i],"/",modelnames[i],"_bc_",1849+l,".tif",sep=""))
-    gc()
-  }
-}
+# system.time "seems" like a simpler way to track method performance
+# following #3 from this link: https://www.alexejgossmann.com/benchmarking_r/
+# Keeping startTimer/stopTimer since they set up cluster, cores, and what not
+system.time(processModels(models, dhwPath="F:/dhw/hist/", sstPath="F:/sst/hist/", max=156, year=1849))
 stopTimer(startTime)
 #30 min per model
 #total time = 6.78 hours
@@ -199,7 +227,6 @@ foreach::foreach(i=1:16, .packages=c("raster")) %dopar% {
   calc(sstdb,fun=mean,filename=paste0("F:/sst/hist/modelmedian_bc_10y",1845+i*10,".tif",sep=""))
 }
 stopTimer(startTime)
-
 #total time = 3 min
 
 
@@ -208,7 +235,7 @@ stopTimer(startTime)
 
 ##rcp85
 
-#open rcp85 models. 
+#open rcp85 models.
 
 setwd("F:/sst/rcp85")
 
@@ -233,7 +260,7 @@ modelnames <- c("CanESM2","CMCC-CESM","CMCC-CM","CMCC-CMS","GISS-E2-H-CC","GISS-
 
 
 
-#adjust bias to models. 
+#adjust bias to models.
 #calculate DHW
 #calculate mean year SST. save
 bias.folder <- "F:/sst/bias/"
@@ -241,38 +268,7 @@ monthlabel <- c(rep(1:12,95))
 memory.limit(size=50000000) #memory free = 113524476
 
 startTime <- startTimer()
-for(i in 1:length(models)){
-  #get all 12 bias rasters for each month
-  for(j in 1:12){
-    a <- paste("bias.", j, sep = "")
-    r <- raster(paste0(bias.folder,modelnames[i],"_bias",j,".tif",sep=""))
-    assign(a,r)
-  }
-  biasmonths <- lapply(paste0('bias.',1:12),get)
-  #get model into comparable raster format
-  i_brickC <- calc(models[[i]], fun=function(x){x - 273.15}) #change from K to C
-  i_brickCd <- disaggregate(i_brickC,fact=2)
-  i_brick1 <- crop(i_brickCd,extent(180,359.5,-90,90))
-  i_brick2 <- crop(i_brickCd,extent(-0.5,180,-90,90))
-  extent(i_brick1) <- c(-180,-0.5,-90,90)
-  i_brickCc <- merge(i_brick1,i_brick2)
-  foreach::foreach(l=1:95, .packages=c("raster","foreach")) %dopar% {
-    l1 <- 12*(l-1)+1
-    l2 <- 12*l
-    SSTbc <- foreach::foreach(k=l1:l2, .packages=c("raster"), .combine=raster::stack) %dopar% {
-      i_brickf <- focal(i_brickCc[[k]],w=matrix(1,nrow=3,ncol=3),fun=mean,na.rm=T,NAonly=T)
-      raster::overlay(i_brickf,biasmonths[[monthlabel[k]]],fun=function(x,y,na.rm=T){return((x+y))})
-    }
-    DHWx <- foreach::foreach(h=1:12, .packages=c("raster"), .combine=raster::stack) %dopar% {
-      d <- disaggregate(SSTbc[[h]],fact=10)
-      DHW <- raster::overlay(d,noaa.mmm,fun=function(x,y,na.rm=T){return((x-y)*4.34)})
-      reclassify(DHW, c(-Inf,0,0))
-    }
-    calc(DHWx,fun=sum,filename=paste0("F:/dhw/rcp85/",modelnames[i],"/",modelnames[i],"_",2005+l,".tif",sep=""))
-    calc(SSTbc,fun=mean,filename=paste0("F:/sst/rcp85/",modelnames[i],"/",modelnames[i],"_bc_",2005+l,".tif",sep=""))
-    gc()
-  }
-}
+system.time(processModels(models, dhwPath="F:/dhw/rcp85/", sstPath="F:/sst/rcp85/"))
 stopTimer(startTime)
 #total time = 3.7 hr
 
@@ -326,7 +322,7 @@ stopTimer(startTime)
 
 ##rcp45
 
-#open rcp45 models. 
+#open rcp45 models.
 
 setwd("F:/sst/rcp45")
 
@@ -351,7 +347,7 @@ modelnames <- c("CanESM2","CMCC-CM","CMCC-CMS","GISS-E2-H-CC","GISS-E2-H","GISS-
 
 
 
-#adjust bias to models. 
+#adjust bias to models.
 #calculate DHW
 #calculate mean year SST. save
 bias.folder <- "F:/sst/bias/"
@@ -359,38 +355,7 @@ monthlabel <- c(rep(1:12,95))
 memory.limit(size=50000000) #memory free = 113524476
 
 startTime <- startTimer()
-for(i in 1:length(models)){
-  #get all 12 bias rasters for each month
-  for(j in 1:12){
-    a <- paste("bias.", j, sep = "")
-    r <- raster(paste0(bias.folder,modelnames[i],"_bias",j,".tif",sep=""))
-    assign(a,r)
-  }
-  biasmonths <- lapply(paste0('bias.',1:12),get)
-  #get model into comparable raster format
-  i_brickC <- calc(models[[i]], fun=function(x){x - 273.15}) #change from K to C
-  i_brickCd <- disaggregate(i_brickC,fact=2)
-  i_brick1 <- crop(i_brickCd,extent(180,359.5,-90,90))
-  i_brick2 <- crop(i_brickCd,extent(-0.5,180,-90,90))
-  extent(i_brick1) <- c(-180,-0.5,-90,90)
-  i_brickCc <- merge(i_brick1,i_brick2)
-  foreach::foreach(l=1:95, .packages=c("raster","foreach")) %dopar% {
-    l1 <- 12*(l-1)+1
-    l2 <- 12*l
-    SSTbc <- foreach::foreach(k=l1:l2, .packages=c("raster"), .combine=raster::stack) %dopar% {
-      i_brickf <- focal(i_brickCc[[k]],w=matrix(1,nrow=3,ncol=3),fun=mean,na.rm=T,NAonly=T)
-      raster::overlay(i_brickf,biasmonths[[monthlabel[k]]],fun=function(x,y,na.rm=T){return((x+y))})
-    }
-    DHWx <- foreach::foreach(h=1:12, .packages=c("raster"), .combine=raster::stack) %dopar% {
-      d <- disaggregate(SSTbc[[h]],fact=10)
-      DHW <- raster::overlay(d,noaa.mmm,fun=function(x,y,na.rm=T){return((x-y)*4.34)})
-      reclassify(DHW, c(-Inf,0,0))
-    }
-    calc(DHWx,fun=sum,filename=paste0("F:/dhw/rcp45/",modelnames[i],"/",modelnames[i],"_",2005+l,".tif",sep=""))
-    calc(SSTbc,fun=mean,filename=paste0("F:/sst/rcp45/",modelnames[i],"/",modelnames[i],"_bc_",2005+l,".tif",sep=""))
-    gc()
-  }
-}
+system.time(processModels(models, dhwPath="F:/dhw/rcp45/", sstPath="F:/sst/rcp45/"))
 stopTimer(startTime)
 #total time = 2.98 hr
 
@@ -446,7 +411,7 @@ stopTimer(startTime)
 
 ##rcp26
 
-#open rcp26 models. 
+#open rcp26 models.
 
 setwd("F:/sst/rcp26")
 
@@ -470,7 +435,7 @@ modelnames <- c("CanESM2","GISS-E2-H","GISS-E2-R","HadGEM2-AO","MIROC-ESM-CHEM",
 
 
 
-#adjust bias to models. 
+#adjust bias to models.
 #calculate DHW
 #calculate mean year SST. save
 bias.folder <- "F:/sst/bias/"
@@ -478,41 +443,10 @@ monthlabel <- c(rep(1:12,95))
 memory.limit(size=50000000) #memory free = 113524476
 
 startTime <- startTimer()
-for(i in 1:length(models)){
-  #get all 12 bias rasters for each month
-  for(j in 1:12){
-    a <- paste("bias.", j, sep = "")
-    r <- raster(paste0(bias.folder,modelnames[i],"_bias",j,".tif",sep=""))
-    assign(a,r)
-  }
-  biasmonths <- lapply(paste0('bias.',1:12),get)
-  #get model into comparable raster format
-  i_brickC <- calc(models[[i]], fun=function(x){x - 273.15}) #change from K to C
-  i_brickCd <- disaggregate(i_brickC,fact=2)
-  i_brick1 <- crop(i_brickCd,extent(180,359.5,-90,90))
-  i_brick2 <- crop(i_brickCd,extent(-0.5,180,-90,90))
-  extent(i_brick1) <- c(-180,-0.5,-90,90)
-  i_brickCc <- merge(i_brick1,i_brick2)
-  foreach::foreach(l=1:95, .packages=c("raster","foreach")) %dopar% {
-    l1 <- 12*(l-1)+1
-    l2 <- 12*l
-    SSTbc <- foreach::foreach(k=l1:l2, .packages=c("raster"), .combine=raster::stack) %dopar% {
-      i_brickf <- focal(i_brickCc[[k]],w=matrix(1,nrow=3,ncol=3),fun=mean,na.rm=T,NAonly=T)
-      raster::overlay(i_brickf,biasmonths[[monthlabel[k]]],fun=function(x,y,na.rm=T){return((x+y))})
-    }
-    DHWx <- foreach::foreach(h=1:12, .packages=c("raster"), .combine=raster::stack) %dopar% {
-      d <- disaggregate(SSTbc[[h]],fact=10)
-      DHW <- raster::overlay(d,noaa.mmm,fun=function(x,y,na.rm=T){return((x-y)*4.34)})
-      reclassify(DHW, c(-Inf,0,0))
-    }
-    calc(DHWx,fun=sum,filename=paste0("F:/dhw/rcp26/",modelnames[i],"/",modelnames[i],"_",2005+l,".tif",sep=""))
-    calc(SSTbc,fun=mean,filename=paste0("F:/sst/rcp26/",modelnames[i],"/",modelnames[i],"_bc_",2005+l,".tif",sep=""))
-    gc()
-  }
-}
+system.time(processModels(models, dhwPath="F:/dhw/rcp26/", sstPath="F:/sst/rcp26/"))
 stopTimer(startTime)
 #46 min per model
-#total time = 
+#total time =
 
 
 #calculate model mean and model median
@@ -535,11 +469,7 @@ stopTimer(startTime)
 #total time = 2 hr
 
 #calculate 5 year mean
-start <- Sys.time()
-cores<- detectCores()-1
-cl <- makeCluster(cores, output="") 
-registerDoParallel(cl)
-
+startTime <- startTimer()
 foreach::foreach(i=1:20, .packages=c("raster")) %dopar% {
   one = i*5-2
   five = i*5+2
@@ -562,9 +492,7 @@ foreach::foreach(i=1:20, .packages=c("raster")) %dopar% {
   calc(sstmb,fun=mean,filename=paste0("F:/sst/rcp26/modelmean_bc_5y",2000+i*5,".tif",sep=""))
   calc(sstdb,fun=mean,filename=paste0("F:/sst/rcp26/modelmedian_bc_5y",2000+i*5,".tif",sep=""))
 }
-stopCluster(cl)
-finish <- Sys.time()
-finish-start
+stopTimer(startTime)
 #total time = 2 min
 
 
@@ -582,17 +510,14 @@ crs(noaa.mmm) <- "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0 "
 #use oisst monthly
 oisst <- brick("D:/SST/OISST/oisstmasked.nc")
 oisst <- rotate(oisst)
-oisst<- dropLayer(oisst,c(1,446:450))
+oisst <- dropLayer(oisst,c(1,446:450))
 
 #calculate mean year SST. save
 monthlabel <- c(rep(1:12,37))
-memory.limit(size=50000000) #memory free = 113524476
+#memory free = 113524476
+memory.limit(size=50000000)
 
-start <- Sys.time()
-cores<- detectCores()-1
-cl <- makeCluster(cores, output="") 
-registerDoParallel(cl)
-
+startTime <- startTimer()
 foreach::foreach(l=1:37, .packages=c("raster","foreach")) %dopar% {
   l1 <- 12*(l-1)+1
   l2 <- 12*l
@@ -605,18 +530,13 @@ foreach::foreach(l=1:37, .packages=c("raster","foreach")) %dopar% {
   gc()
 }
 
-stopCluster(cl)
-finish <- Sys.time()
-finish-start
+stopTimer(startTime)
 #6.4 min
 
 
 
 #calculate 5 year mean
-start <- Sys.time()
-cores<- detectCores()-1
-cl <- makeCluster(cores, output="") 
-registerDoParallel(cl)
+startTime <- startTimer()
 
 foreach::foreach(i=1:7, .packages=c("raster")) %dopar% {
   one = i*5-2
@@ -628,9 +548,5 @@ foreach::foreach(i=1:7, .packages=c("raster")) %dopar% {
   }
   calc(dhwmb,fun=mean,filename=paste0("F:/dhw/emp/emp_oisst_5y",1980+i*5,".tif",sep=""))
 }
-stopCluster(cl)
-finish <- Sys.time()
-finish-start
 
-
-
+stopTimer(startTime)
